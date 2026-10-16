@@ -276,10 +276,16 @@ body:not(.opened) .rise{opacity:1;transform:none}
 
 /* ---------- fabric fades as it falls ---------- */
 #cloth{transition:opacity 1s ease .3s,filter 1.4s ease}
-.cloth-fading #cloth{opacity:0!important;filter:blur(2px);transition:opacity 1.8s ease .9s,filter 1.8s ease .9s}
+.cloth-fading #cloth{opacity:0!important;filter:blur(1.5px);transition:opacity 1.6s ease .4s,filter 1.6s ease .4s}
 
 /* ---------- blurred backdrop for the closing section ---------- */
 .hsnow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+/* before the seal is broken, only the opening screen exists */
+body:not(.opened) main,body:not(.opened) .vista,body:not(.opened) .music{visibility:hidden}
+#magic{position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none}
+.secret-pill{display:inline-block;padding:9px 18px;border-radius:999px;background:rgba(20,11,14,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(228,197,143,.45);color:#f6e2bd;text-shadow:none;box-shadow:0 8px 24px -10px rgba(0,0,0,.6)}
+.day.secret-pill{font-size:.98rem;margin-top:4px}
+.eyebrow.secret-pill{padding:8px 16px 8px calc(16px + .46em)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -288,6 +294,7 @@ body:not(.opened) .rise{opacity:1;transform:none}
   <video id="bgv" src="bg.mp4" poster="poster.jpg" autoplay muted loop playsinline preload="auto"></video>
 </div>
 <canvas id="sparkle" aria-hidden="true"></canvas>
+<canvas id="magic" aria-hidden="true"></canvas>
 <div class="grain" aria-hidden="true"></div>
 
 <div class="bar top" aria-hidden="true"></div>
@@ -326,7 +333,7 @@ body:not(.opened) .rise{opacity:1;transform:none}
       <span class="amp">&amp;</span>
       <span class="n"><i>Sarru</i></span>
     </h1>
-    <div class="day rise d4">Our date is a little secret. Keep scrolling ✦</div>
+    <div class="day secret-pill rise d4">Our date is a little secret. Keep scrolling ✦</div>
   </section>
 
   <section class="photos-wrap" aria-label="Photos of Jass and Sarru">
@@ -347,7 +354,7 @@ body:not(.opened) .rise{opacity:1;transform:none}
   <div class="vista-in">
     <section class="secret" id="secret" aria-label="Scratch to reveal the date">
       <div class="stack">
-        <div class="before"><div class="eyebrow">A little secret</div><h2 style="margin-top:12px">Scratch the heart to<br>reveal our big day</h2></div>
+        <div class="before"><div class="eyebrow secret-pill">A little secret</div><h2 style="margin-top:12px">Scratch the heart to<br>reveal our big day</h2></div>
         <div class="after"><div class="eyebrow">It's a date</div><h2 style="margin-top:12px">Saturday, the thirteenth<br>of February 2027</h2></div>
       </div>
       <div class="scratch" id="scratch">
@@ -413,10 +420,16 @@ body:not(.opened) .rise{opacity:1;transform:none}
 </button>
 <audio id="song" src="music.mp3" loop preload="auto"></audio>
 <div class="toast" id="toast" role="status"></div>
-<audio id="shimmer" src="shimmer.mp3" preload="auto"></audio>
+<audio id="shimmer" src="seal-v.mp3" preload="auto"></audio>
 <audio id="chime" src="chime.mp3" preload="auto"></audio>
 
 <script>
+// ---------- refresh always starts at the seal, never at an old scroll position ----------
+if('scrollRestoration' in history)history.scrollRestoration='manual';
+(function(){
+  function toTop(){if(!document.body.classList.contains('opened'))window.scrollTo(0,0);}
+  toTop();addEventListener('DOMContentLoaded',toTop);addEventListener('load',toTop);addEventListener('pageshow',e=>{toTop();if(e.persisted)location.reload();});
+})();
 (function(){
   const song=document.getElementById('song'),btn=document.getElementById('music'),lab=document.getElementById('mlabel');
   song.volume=0;
@@ -438,85 +451,82 @@ body:not(.opened) .rise{opacity:1;transform:none}
     ac();e.currentTarget.classList.add('broken');
     try{shimmer.currentTime=0;shimmer.volume=1;shimmer.play().catch(()=>{});}catch(_){}
     const r=e.currentTarget.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-    window.__burst&&window.__burst(cx,cy,170);
-    setTimeout(()=>window.__burst&&window.__burst(cx,cy,90),240);
-    setTimeout(()=>window.__burst&&window.__burst(cx,cy-60,60),520);
+    window.__magic&&window.__magic(cx,cy,1);
     B.classList.add('started-curtain');cloth.start();
-    document.querySelectorAll('video').forEach(v=>{v.play().catch(()=>{});});
+    document.querySelectorAll('video').forEach(v=>{try{v.pause();v.currentTime=0;}catch(_){}v.play().catch(()=>{});});
     window.scrollTo(0,0);
     setTimeout(()=>{B.classList.add('opened');},900);                 // title fades away, the fabric hangs behind it
     setTimeout(()=>{btn.hidden=false;play();},1100);                  // song fades in under the shimmer
     setTimeout(()=>{cloth.release(()=>{B.classList.add('curtains-done');startAutoScroll(5000);});},2700);
   });
 
-  // ---------- falling fabric (verlet cloth) ----------
+  // ---------- parting tulle curtains (two verlet cloth panels that open from the centre) ----------
   const cloth=(function(){
     const cv=document.getElementById('cloth'),cx=cv.getContext('2d');
     const img=new Image();img.src='cloth.webp';
     const tex=document.createElement('canvas');tex.width=900;tex.height=1400;const tx=tex.getContext('2d');
-    let ready=false,pts=[],cons=[],cols=16,rows=22,W,H,d,running=false,released=false,t0=0,onDone=null,relAt=0;
-    function paintTex(){
-      tx.clearRect(0,0,900,1400);tx.drawImage(img,0,0,900,1400);
-      tx.save();tx.textAlign='center';tx.textBaseline='middle';
-      tx.shadowColor='rgba(120,80,30,.35)';tx.shadowBlur=6;tx.shadowOffsetY=2;
-      const g=tx.createLinearGradient(0,560,0,760);g.addColorStop(0,'#d8b273');g.addColorStop(.5,'#b98f55');g.addColorStop(1,'#a07840');
-      tx.restore();ready=true;}
-    img.onload=paintTex;
-    function build(){
-      d=Math.min(2,devicePixelRatio||1);W=cv.width=innerWidth*d;H=cv.height=innerHeight*d;
-      const x0=-W*.04,sw=W*1.08,sh=H*1.02;pts=[];cons=[];
-      for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const x=x0+sw*i/(cols-1),y=sh*j/(rows-1)-H*.01;
-        pts.push({x,y,px:x,py:y,pin:j===0,u:900*i/(cols-1),v:1400*j/(rows-1),drag:.014+.03*(.5+.5*Math.sin(i*.8+j*.5)),rel:320*Math.abs(i-(cols-1)/2)/((cols-1)/2)});}
-      const rx=sw/(cols-1),ry=sh/(rows-1);
-      for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const k=j*cols+i;
-        if(i<cols-1)cons.push([k,k+1,rx,1]);if(j<rows-1)cons.push([k,k+cols,ry,1]);
-        if(i<cols-2)cons.push([k,k+2,rx*2,.35]);if(j<rows-2)cons.push([k,k+2*cols,ry*2,.35]);}
+    let ready=false,panels=[],W,H,d,running=false,opening=false,t0=0,openAt=0,onDone=null,scaleU=1,scaleV=1;
+    img.onload=()=>{tx.clearRect(0,0,900,1400);tx.drawImage(img,0,0,900,1400);ready=true;};
+    const COLS=10,ROWS=22,OPEN_MS=2100;
+    function mkPanel(side){
+      const x0=side<0?-W*.03:W*.485,x1=side<0?W*.515:W*1.03,u0=side<0?0:430,u1=side<0?470:900;
+      const sh=H*1.02,pts=[],cons=[];
+      for(let j=0;j<ROWS;j++)for(let i=0;i<COLS;i++){const x=x0+(x1-x0)*i/(COLS-1),y=sh*j/(ROWS-1)-H*.01;
+        pts.push({x,y,px:x,py:y,hx:x,pin:j===0,u:u0+(u1-u0)*i/(COLS-1),v:1400*j/(ROWS-1),drag:.02+.02*(.5+.5*Math.sin(i*.9+j*.45))});}
+      const rx=(x1-x0)/(COLS-1),ry=sh/(ROWS-1);
+      for(let j=0;j<ROWS;j++)for(let i=0;i<COLS;i++){const k=j*COLS+i;
+        if(i<COLS-1)cons.push([k,k+1,rx,0]);            // horizontal: rope (resists stretch only, so the tulle gathers into folds)
+        if(j<ROWS-1)cons.push([k,k+COLS,ry,1]);         // vertical: keeps its length
+        if(j<ROWS-2)cons.push([k,k+2*COLS,ry*2,.3]);}
+      const edge=side<0?x0:x1;
+      return{side,pts,cons,edge};
     }
+    function build(){d=Math.min(2,devicePixelRatio||1);W=cv.width=innerWidth*d;H=cv.height=innerHeight*d;
+      scaleU=(W*.545)/470;scaleV=(H*1.02)/1400;panels=[mkPanel(-1),mkPanel(1)];}
     function tri(a,b,c){
       const x0=a.x,y0=a.y,x1=b.x,y1=b.y,x2=c.x,y2=c.y,u0=a.u,v0=a.v,u1=b.u,v1=b.v,u2=c.u,v2=c.v;
-      cx.save();cx.beginPath();
-      const mx=(x0+x1+x2)/3,my=(y0+y1+y2)/3,e=1.012;     // grow slightly to hide seams
+      cx.save();cx.beginPath();const mx=(x0+x1+x2)/3,my=(y0+y1+y2)/3,e=1.015;
       cx.moveTo(mx+(x0-mx)*e,my+(y0-my)*e);cx.lineTo(mx+(x1-mx)*e,my+(y1-my)*e);cx.lineTo(mx+(x2-mx)*e,my+(y2-my)*e);cx.closePath();cx.clip();
       const den=u0*(v2-v1)-u1*v2+u2*v1+(u1-u2)*v0;if(Math.abs(den)<1e-6){cx.restore();return;}
       const m11=-(v0*(x2-x1)-v1*x2+v2*x1+(v1-v2)*x0)/den,m12=(v1*y2+v0*(y1-y2)-v2*y1+(v2-v1)*y0)/den,
             m21=(u0*(x2-x1)-u1*x2+u2*x1+(u1-u2)*x0)/den,m22=-(u1*y2+u0*(y1-y2)-u2*y1+(u2-u1)*y0)/den,
             dx=(u0*(v2*x1-v1*x2)+v0*(u1*x2-u2*x1)+(u2*v1-u1*v2)*x0)/den,dy=(u0*(v2*y1-v1*y2)+v0*(u1*y2-u2*y1)+(u2*v1-u1*v2)*y0)/den;
       cx.transform(m11,m12,m21,m22,dx,dy);cx.drawImage(tex,0,0);cx.restore();
-      // fold shading from compression
-      const area=Math.abs((x1-x0)*(y2-y0)-(x2-x0)*(y1-y0))/2,rest=Math.abs((u1-u0)*(v2-v0)-(u2-u0)*(v1-v0))/2*(W*1.08/900)*(H*1.02/1400);
-      const k=area/rest;if(k<.95){cx.fillStyle=`rgba(255,255,255,${Math.min(.14,(.95-k)*.4)})`;cx.beginPath();cx.moveTo(x0,y0);cx.lineTo(x1,y1);cx.lineTo(x2,y2);cx.closePath();cx.fill();}
+      // gathered tulle overlaps itself, so it reads denser and brighter
+      const area=Math.abs((x1-x0)*(y2-y0)-(x2-x0)*(y1-y0))/2,rest=Math.abs((u1-u0)*(v2-v0)-(u2-u0)*(v1-v0))/2*scaleU*scaleV;
+      const k=area/rest;if(k<.9){cx.fillStyle=`rgba(255,255,255,${Math.min(.32,(.9-k)*.42)})`;cx.beginPath();cx.moveTo(x0,y0);cx.lineTo(x1,y1);cx.lineTo(x2,y2);cx.closePath();cx.fill();}
     }
+    const ease=k=>k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
     function step(now){
       if(!running)return;
-      const t=(now-t0)/1000,g=(released?.42:.25)*d*(H/(900*d))*1.0;
-      for(const p of pts){
-        if(p.pin&&!(released&&now-relAt>p.rel)){p.x=p.px+(Math.sin(t*1.4+p.u*.01)*0.4*d)*(released?0:1);continue;}
-        if(p.pin)p.pin=false;
-        const vx=(p.x-p.px)*(1-p.drag*(released?1:3)),vy=(p.y-p.py)*(1-p.drag*(released?1:3));
-        p.px=p.x;p.py=p.y;
-        const wind=released?Math.sin(t*2.6+p.v*.005+p.u*.004)*.28*d:Math.sin(t*1.3+p.v*.004)*.08*d;
-        p.x+=vx+wind;p.y+=vy+g;
+      const t=(now-t0)/1000,g=.3*d*(H/(900*d)),k=opening?Math.min(1,(now-openAt)/OPEN_MS):0,e=ease(k);
+      for(const P of panels){
+        for(const p of P.pts){
+          if(p.pin){
+            // pins slide along the rod toward their outer edge, bunching the fabric; at the end they slip off-screen
+            const gathered=P.edge+(p.hx-P.edge)*.1,off=P.side*W*.18*Math.max(0,(k-.7)/.3);
+            const tx_=p.hx+(gathered-p.hx)*e+off;p.px=p.x;p.x=tx_+(opening?0:Math.sin(t*1.3+p.u*.01)*.35*d);continue;}
+          const dr=opening?p.drag:p.drag*2.5,vx=(p.x-p.px)*(1-dr),vy=(p.y-p.py)*(1-dr);p.px=p.x;p.py=p.y;
+          const breeze=Math.sin(t*1.6+p.v*.004+p.u*.006)*(opening?.22:.06)*d;
+          p.x+=vx+breeze;p.y+=vy+g;
+        }
+        for(let it=0;it<6;it++)for(const [a,b,r,stf] of P.cons){const A=P.pts[a],Bq=P.pts[b];const dx=Bq.x-A.x,dy=Bq.y-A.y,dist=Math.hypot(dx,dy)||1;
+          if(stf===0){if(dist<=r)continue;}else if(stf<1&&dist>r)continue;
+          const s=stf===0?1:stf,diff=(dist-r)/dist*.5*s;if(A.pin&&Bq.pin)continue;
+          if(A.pin){Bq.x-=dx*diff*2;Bq.y-=dy*diff*2;}else if(Bq.pin){A.x+=dx*diff*2;A.y+=dy*diff*2;}else{A.x+=dx*diff;A.y+=dy*diff;Bq.x-=dx*diff;Bq.y-=dy*diff;}}
       }
-      for(let it=0;it<6;it++)for(const [a,b,r,stf] of cons){const A=pts[a],Bq=pts[b];const dx=Bq.x-A.x,dy=Bq.y-A.y,dist=Math.hypot(dx,dy)||1;if(stf<1&&dist>r)continue;const diff=(dist-r)/dist*.5*stf;
-        const ap=A.pin,bp=Bq.pin;if(ap&&bp)continue;
-        if(ap){Bq.x-=dx*diff*2;Bq.y-=dy*diff*2;}else if(bp){A.x+=dx*diff*2;A.y+=dy*diff*2;}else{A.x+=dx*diff;A.y+=dy*diff;Bq.x-=dx*diff;Bq.y-=dy*diff;}}
       cx.clearRect(0,0,W,H);
-      if(ready){for(let j=0;j<rows-1;j++)for(let i=0;i<cols-1;i++){const a=pts[j*cols+i],b=pts[j*cols+i+1],c=pts[(j+1)*cols+i+1],e=pts[(j+1)*cols+i];tri(a,b,c);tri(a,c,e);}}
-      else{cx.fillStyle='#efe2d6';cx.fillRect(0,0,W,H);}
-      if(released&&(pts.every(p=>p.y>H+40)||performance.now()-relAt>3300)){running=false;cx.clearRect(0,0,W,H);onDone&&onDone();return;}
+      if(ready){for(const P of panels)for(let j=0;j<ROWS-1;j++)for(let i=0;i<COLS-1;i++){const a=P.pts[j*COLS+i],b=P.pts[j*COLS+i+1],c=P.pts[(j+1)*COLS+i+1],e2=P.pts[(j+1)*COLS+i];tri(a,b,c);tri(a,c,e2);}}
+      if(opening&&now-openAt>OPEN_MS+900){running=false;cx.clearRect(0,0,W,H);onDone&&onDone();return;}
       requestAnimationFrame(step);
     }
     return{
       start(){if(running)return;build();running=true;t0=performance.now();requestAnimationFrame(step);},
       release(done){onDone=done;
         if(matchMedia('(prefers-reduced-motion: reduce)').matches){running=false;cx.clearRect(0,0,W,H);done&&done();return;}
-        released=true;relAt=performance.now();setTimeout(()=>B.classList.add('cloth-fading'),250);
-        // a soft "whoosh" as the fabric drops
-        const a=ac();if(a){const n=a.createBufferSource(),buf=a.createBuffer(1,a.sampleRate*1.2,a.sampleRate),ch=buf.getChannelData(0);
-          for(let i=0;i<ch.length;i++)ch[i]=(Math.random()*2-1)*Math.sin(Math.PI*i/ch.length)**2;
-          const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=700;f.Q.value=.6;const g=a.createGain();g.gain.value=.12;
-          n.buffer=buf;n.connect(f).connect(g).connect(a.destination);n.start();}
-        setTimeout(()=>{if(running){running=false;cx.clearRect(0,0,W,H);onDone&&onDone();}},4500);}
+        opening=true;openAt=performance.now();setTimeout(()=>B.classList.add('cloth-fading'),1300);
+        // the rustle of the fabric is part of the seal sound (seal-v.mp3), timed to this moment
+        setTimeout(()=>{if(running){running=false;cx.clearRect(0,0,W,H);onDone&&onDone();}},4600);}
     };
   })();
 
@@ -604,7 +614,7 @@ body:not(.opened) .rise{opacity:1;transform:none}
     if(revealed)return;revealed=true;
     el('scratch').classList.add('done');secret.classList.add('revealed');el('pct').textContent='';el('scratchHint').textContent='See you there ✦';
     const r=foil.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height*.45;
-    window.__burst&&window.__burst(cx,cy,140);setTimeout(()=>window.__burst&&window.__burst(cx,cy,70),260);hearts(30,cx);
+    window.__magic&&window.__magic(cx,cy,.75);hearts(30,cx);
     // reveal music: duck the song, ring the bells, bring the song back
     const v0=song.volume;if(!song.paused)fade(.3,300);
     try{chime.currentTime=0;chime.volume=1;chime.play().catch(()=>{});}catch(_){}
@@ -653,6 +663,52 @@ body:not(.opened) .rise{opacity:1;transform:none}
     if(matchMedia('(prefers-reduced-motion: reduce)').matches){on=true;frame(0);on=false;return;}
     if('IntersectionObserver' in window){new IntersectionObserver(es=>{const v=es.some(e=>e.isIntersecting);if(v&&!on){on=true;last=0;requestAnimationFrame(frame);}else if(!v)on=false;}).observe(c);}
     else{on=true;requestAnimationFrame(frame);}
+  })();
+
+
+  // ---------- magic sparkle (top layer): flash, ring, star glints, glitter, rising swirl, tiny hearts ----------
+  (function(){
+    const c=document.getElementById('magic'),x=c.getContext('2d');let W,H,d,P=[],FX=[],run=false;
+    function size(){d=Math.min(2,devicePixelRatio||1);W=c.width=innerWidth*d;H=c.height=innerHeight*d;}
+    size();addEventListener('resize',size);
+    const COL=[[255,246,222],[255,231,180],[244,207,140],[255,214,226],[255,255,255]];
+    const HEART=new Path2D('M0 3.2C-1.8 1.6-3.4.4-3.4-1.2c0-1.1.9-2 2-2 .6 0 1.1.3 1.4.8.3-.5.8-.8 1.4-.8 1.1 0 2 .9 2 2 0 1.6-1.6 2.8-3.4 4.4z');
+    function glint(px,py,s,rot,a,col){
+      const g=x.createRadialGradient(px,py,0,px,py,s*2.6);g.addColorStop(0,`rgba(${col},${a*.55})`);g.addColorStop(1,`rgba(${col},0)`);
+      x.fillStyle=g;x.beginPath();x.arc(px,py,s*2.6,0,6.283);x.fill();
+      x.save();x.translate(px,py);x.rotate(rot);x.fillStyle=`rgba(255,252,240,${a})`;x.beginPath();
+      x.moveTo(0,-s);x.quadraticCurveTo(s*.12,-s*.12,s,0);x.quadraticCurveTo(s*.12,s*.12,0,s);x.quadraticCurveTo(-s*.12,s*.12,-s,0);x.quadraticCurveTo(-s*.12,-s*.12,0,-s);x.fill();x.restore();}
+    function frame(t){
+      x.clearRect(0,0,W,H);x.globalCompositeOperation='lighter';
+      for(let i=FX.length-1;i>=0;i--){const f=FX[i];const k=(t-f.t0)/f.dur;if(k<0)continue;if(k>=1){FX.splice(i,1);continue;}
+        if(f.type==='flash'){const r=f.r*(0.4+k*.9),a=(1-k)**2*.9;const g=x.createRadialGradient(f.x,f.y,0,f.x,f.y,r);
+          g.addColorStop(0,`rgba(255,250,235,${a})`);g.addColorStop(.35,`rgba(255,225,170,${a*.55})`);g.addColorStop(1,'rgba(255,215,160,0)');x.fillStyle=g;x.beginPath();x.arc(f.x,f.y,r,0,6.283);x.fill();}
+        else{const r=f.r*(1-(1-k)**3),a=(1-k)**1.5*.85;x.strokeStyle=`rgba(244,214,160,${a})`;x.lineWidth=(f.w*(1-k)+.5)*d;x.beginPath();x.arc(f.x,f.y,r,0,6.283);x.stroke();}}
+      for(let i=P.length-1;i>=0;i--){const p=P[i];
+        if(t<p.t0)continue;
+        const age=(t-p.t0)/1000;if(age>p.life){P.splice(i,1);continue;}
+        p.vx*=p.drag;p.vy=p.vy*p.drag+p.g;p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr;
+        const fade=Math.min(1,age/.08)*(1-age/p.life)**1.2,tw=p.tw?(.55+.45*Math.sin(age*p.tw+p.ph)):1,a=Math.max(0,fade*tw);
+        if(p.k==='glint')glint(p.x,p.y,p.s*(.7+.3*tw),p.rot,a,p.col);
+        else if(p.k==='heart'){x.save();x.translate(p.x,p.y);x.rotate(p.rot*.3);x.scale(p.s,p.s);x.fillStyle=`rgba(${p.col},${a*.9})`;x.fill(HEART);x.restore();}
+        else{x.fillStyle=`rgba(${p.col},${a})`;x.beginPath();x.arc(p.x,p.y,p.s,0,6.283);x.fill();}
+      }
+      x.globalCompositeOperation='source-over';
+      if(P.length||FX.length)requestAnimationFrame(frame);else{run=false;x.clearRect(0,0,W,H);}
+    }
+    function R(a,b){return a+Math.random()*(b-a);}
+    window.__magic=(cx,cy,sc)=>{
+      sc=sc||1;const X=cx*d,Y=cy*d,now=performance.now();
+      FX.push({type:'flash',x:X,y:Y,r:170*d*sc,t0:now,dur:650});
+      const n=Math.round(sc*sc*1)||1;
+      for(let i=0;i<70*sc;i++){const a=R(0,6.283),v=R(2,10)*d*sc;P.push({k:'glint',x:X,y:Y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1.5*d,drag:R(.93,.965),g:.035*d,s:R(3.5,11)*d*sc,rot:R(0,3.14),vr:R(-.05,.05),life:R(1.6,2.9),tw:R(8,18),ph:R(0,6),col:COL[i%5].join(','),t0:now});}
+      for(let i=0;i<140*sc;i++){const a=R(0,6.283),v=R(1,7)*d*sc;P.push({k:'dot',x:X,y:Y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1*d,drag:R(.94,.97),g:.05*d,s:R(.6,2.2)*d,rot:0,vr:0,life:R(.9,2.0),tw:R(10,25),ph:R(0,6),col:COL[(i*7)%5].join(','),t0:now});}
+      for(let i=0;i<48*sc;i++){const k=i/(48*sc),side=i%2?1:-1,ang=k*10+(side>0?0:3.14);   // rising double helix of light
+        P.push({k:i%3?'dot':'glint',x:X+Math.cos(ang)*40*d*sc,y:Y-k*30*d,vx:Math.cos(ang+1.57)*1.2*d*side,vy:-R(2.2,3.6)*d*sc,drag:.985,g:-.01*d,s:(i%3?R(1,2.2):R(4,7))*d*sc,rot:0,vr:.04,life:R(1.4,2.2),tw:14,ph:i,col:COL[i%5].join(','),t0:now+k*700});}
+      for(let i=0;i<12*sc;i++){const a=R(-2.6,-.5),v=R(1.5,4)*d*sc;P.push({k:'heart',x:X+R(-20,20)*d,y:Y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,drag:.97,g:-.012*d,s:R(1.6,3.2)*d*sc,rot:R(-.5,.5),vr:R(-.02,.02),life:R(1.8,2.8),tw:0,ph:0,col:(i%2?'255,170,196':'244,207,140'),t0:now+R(80,400)});}
+      for(let i=0;i<40*sc;i++){P.push({k:'dot',x:X+R(-120,120)*d*sc,y:Y+R(-60,80)*d*sc,vx:R(-.3,.3)*d,vy:-R(.3,1)*d,drag:.99,g:-.004*d,s:R(.6,1.6)*d,rot:0,vr:0,life:R(2,3.4),tw:R(5,12),ph:R(0,6),col:'255,240,210',t0:now+R(300,1200)});}
+      if(!run){run=true;requestAnimationFrame(frame);}
+    };
   })();
 
   // ---------- sparkles over the Banff view ----------
