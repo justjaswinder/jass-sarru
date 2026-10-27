@@ -210,6 +210,32 @@ body:not(.opened) .rise{opacity:1;transform:none}
 .ph.d{width:50%;height:46%;right:1%;top:52%;transform:rotate(-4deg)}
 .ph.c img{object-position:50% 60%}.ph.d img{object-position:50% 45%}
 
+/* ---------- featured fifth photo ---------- */
+.feat{position:relative;width:100%;display:flex;flex-direction:column;align-items:center;gap:30px;margin-top:18px}
+.feat .lead-in{font-family:var(--script);color:var(--gold);font-size:clamp(1.6rem,7vw,2.1rem);line-height:1}
+.ph.e{position:relative;width:94%;padding:12px 12px 52px;transform:rotate(-2deg) translateY(40px);opacity:0;
+  transition:transform 1.2s cubic-bezier(.2,.8,.2,1),opacity 1s ease}
+.ph.e img{height:auto;aspect-ratio:4/3;object-position:50% 55%;filter:sepia(.9) brightness(1.5) contrast(.55) blur(5px);
+  transition:filter 2.6s ease .5s}
+.ph.e figcaption{bottom:10px;font-size:clamp(1.25rem,5.6vw,1.7rem)}
+.ph.e::before,.ph.e::after{content:"";position:absolute;top:-12px;width:86px;height:26px;z-index:2;
+  background:linear-gradient(135deg,rgba(240,215,168,.85),rgba(201,160,99,.75));box-shadow:0 2px 6px rgba(0,0,0,.25);
+  -webkit-mask:linear-gradient(90deg,transparent 0 3px,#000 3px calc(100% - 3px),transparent 0);mask:linear-gradient(90deg,transparent 0 3px,#000 3px calc(100% - 3px),transparent 0)}
+.ph.e::before{left:-14px;transform:rotate(-32deg)}
+.ph.e::after{right:-14px;transform:rotate(32deg)}
+.ph.e .glint{position:absolute;inset:12px 12px 52px;overflow:hidden;pointer-events:none;border-radius:1px}
+.ph.e .glint::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;
+  background:linear-gradient(100deg,transparent,rgba(255,248,230,.55),transparent);transform:skewX(-18deg)}
+.feat.dev .ph.e{opacity:1;transform:rotate(-2deg)}
+.feat.dev .ph.e img{filter:none}
+.feat.dev .ph.e .glint::after{animation:glint 1.6s ease 2.6s both}
+@keyframes glint{to{left:130%}}
+.feat .heart{position:absolute;right:4%;bottom:34px;z-index:3;width:44px;height:44px;opacity:0;transform:scale(.3) rotate(-20deg);
+  transition:opacity .5s ease 2.9s,transform .7s cubic-bezier(.2,1.6,.4,1) 2.9s;filter:drop-shadow(0 4px 8px rgba(0,0,0,.45))}
+.feat.dev .heart{opacity:1;transform:scale(1) rotate(12deg)}
+@media (hover:hover){.feat.dev .ph.e:hover{transform:rotate(0) scale(1.02)}}
+@media (prefers-reduced-motion:reduce){.ph.e,.ph.e img,.feat .heart{transition:none}.feat .glint{display:none}}
+
 
 /* ---------- wax seal ---------- */
 .seal::before,.seal::after{display:none!important}
@@ -343,6 +369,11 @@ body:not(.opened) main,body:not(.opened) .vista,body:not(.opened) .music{visibil
       <figure class="ph b"><img src="p2.jpg" alt="Jass and Sarru holding hands in the car with two iced coffees"><figcaption>hand in hand</figcaption></figure>
       <figure class="ph c"><img src="p3.jpg" alt="Jass and Sarru raising two iced drinks with the Rockies behind"><figcaption>cheers to us</figcaption></figure>
       <figure class="ph d"><img src="p4.jpg" alt="Jass and Sarru holding two dipped ice cream cones on Banff Avenue"><figcaption>sweet on you</figcaption></figure>
+    </div>
+    <div class="feat" id="feat">
+      <div class="lead-in">and then, the mountains&hellip;</div>
+      <figure class="ph e"><img src="p5.jpg" alt="Jass and Sarru smiling in a riverside selfie with the Rockies behind" loading="lazy"><span class="glint" aria-hidden="true"></span><figcaption>our forever view</figcaption></figure>
+      <svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6c6cf"/><stop offset="1" stop-color="#b3263f"/></linearGradient></defs><path fill="url(#hg5)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.4 2.6.8-1.4 2.3-2.6 4.4-2.6 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>
     </div>
   </section>
 
@@ -752,4 +783,10 @@ if('scrollRestoration' in history)history.scrollRestoration='manual';
 })();
 </script>
 
+<script>
+(function(){var f=document.getElementById('feat');if(!f)return;
+  if(!('IntersectionObserver' in window)){f.classList.add('dev');return;}
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){f.classList.add('dev');io.disconnect();}})},{threshold:.35});
+  io.observe(f);})();
+</script>
 </body></html>
